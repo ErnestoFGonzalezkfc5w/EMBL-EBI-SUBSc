@@ -1,0 +1,48 @@
+plugins {
+	id 'org.springframework.boot' version '2.2.4.RELEASE'
+	id 'io.spring.dependency-management' version '1.0.9.RELEASE'
+	id 'java'
+}
+
+group = 'uk.ac.ebi.ait'
+version = '0.0.1-SNAPSHOT'
+sourceCompatibility = '11'
+
+configurations {
+	developmentOnly
+	runtimeClasspath {
+		extendsFrom developmentOnly
+	}
+	compileOnly {
+		extendsFrom annotationProcessor
+	}
+}
+
+repositories {
+	mavenCentral()
+	maven { url "https://gitlab.ebi.ac.uk/api/v4/groups/enasequence/-/packages/maven" }
+	maven { url "https://gitlab.ebi.ac.uk/api/v4/projects/811/packages/maven"}
+}
+
+dependencies {
+	implementation 'org.springframework.boot:spring-boot-starter-amqp'
+	implementation 'org.springframework.boot:spring-boot-starter-hateoas'
+	implementation 'org.springframework.boot:spring-boot-starter-web'
+
+	implementation( group: 'uk.ac.ebi.ena', name: 'readtools', version: '1.1.11' )
+	implementation( group: 'uk.ac.ebi.ena.sequence', name: 'sequencetools', version: '2.0.50' )
+	implementation( group: 'uk.ac.ebi.ena.webin-cli', name: 'webin-cli-validator', version: '1.0.8' )
+
+	compileOnly 'org.projectlombok:lombok'
+	developmentOnly 'org.springframework.boot:spring-boot-devtools'
+
+	annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+	annotationProcessor 'org.projectlombok:lombok'
+
+	testImplementation('org.springframework.boot:spring-boot-starter-test')
+	testImplementation 'org.springframework.amqp:spring-rabbit-test'
+}
+
+test {
+	useJUnitPlatform()
+}
