@@ -3,11 +3,11 @@ package uk.ac.ebi.ait.filecontentvalidatorservice.utils;
 import uk.ac.ebi.ait.filecontentvalidatorservice.exception.FileHandleException;
 
 import java.io.File;
-import java.io.IOException;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
+import java.util.UUID;
 
 public class FileUtil {
 
@@ -75,16 +75,11 @@ public class FileUtil {
 	}
 
 	public static File createTempDir() {
-		try {
-			File folder = File.createTempFile("test", "test");
+			File folder = new File("temp/" + UUID.randomUUID().toString());
 
-			assert(folder.delete());
 			assert(folder.mkdirs());
 
 			return folder;
-		} catch (IOException e) {
-			throw new RuntimeException(e);
-		}
 	}
 
 }
