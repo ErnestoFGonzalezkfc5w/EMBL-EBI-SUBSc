@@ -5,7 +5,7 @@ jdk:
 
 before_script:
   - "echo $JAVA_OPTS"
-  - "export JAVA_OPTS='-Xmx4096m -XX:MaxPermSize=2048m -XX:+HeapDumpOnOutOfMemoryError'"
+  - "export JAVA_OPTS='-Xms3G -Xmx4G -XX:+HeapDumpOnOutOfMemoryError'"
 
 before_cache:
   - rm -f  $HOME/.gradle/caches/modules-2/modules-2.lock
