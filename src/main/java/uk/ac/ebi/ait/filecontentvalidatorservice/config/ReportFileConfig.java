@@ -1,7 +1,6 @@
 package uk.ac.ebi.ait.filecontentvalidatorservice.config;
 
 import lombok.Data;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.stereotype.Component;
 import uk.ac.ebi.ait.filecontentvalidatorservice.utils.FileUtil;
 

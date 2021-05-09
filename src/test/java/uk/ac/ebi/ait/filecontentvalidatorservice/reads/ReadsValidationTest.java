@@ -1,29 +1,35 @@
 package uk.ac.ebi.ait.filecontentvalidatorservice.reads;
 
-import org.jetbrains.annotations.NotNull;
+import org.junit.After;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.SpyBean;
 import org.springframework.test.context.junit4.SpringRunner;
-import uk.ac.ebi.ait.filecontentvalidatorservice.exception.FileContentValidationException;
+import uk.ac.ebi.ait.filecontentvalidatorservice.config.CommandLineParameters;
+import uk.ac.ebi.ait.filecontentvalidatorservice.service.CommandLineParametersBuilder;
 import uk.ac.ebi.ait.filecontentvalidatorservice.service.FileContentValidationHandler;
 import uk.ac.ebi.ait.filecontentvalidatorservice.utils.ReportTester;
-import uk.ac.ebi.ena.webin.cli.validator.file.SubmissionFile;
-import uk.ac.ebi.ena.webin.cli.validator.file.SubmissionFiles;
-import uk.ac.ebi.ena.webin.cli.validator.manifest.ReadsManifest;
+import uk.ac.ebi.ena.webin.cli.validator.api.ValidationResponse;
 import uk.ac.ebi.ena.webin.cli.validator.manifest.ReadsManifest.FileType;
+import uk.ac.ebi.ena.webin.cli.validator.response.ReadsValidationResponse;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Comparator;
 import java.util.Objects;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.is;
+import static org.junit.Assert.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doReturn;
 
 @RunWith(SpringRunner.class)
 @SpringBootTest
@@ -32,21 +38,43 @@ public class ReadsValidationTest {
     private static final Logger log = LoggerFactory.getLogger(ReadsValidationTest.class);
     private static final String FILE_CONTENT_VALIDATION_REPORT_FILENAME = "file-content-validation.report";
 
+    private static final String VALIDATION_RESULT_UUID = UUID.randomUUID().toString();
+    private static final String FILE_UUID = UUID.randomUUID().toString();
+    private static final String VALIDATION_RESULT2_UUID = UUID.randomUUID().toString();
+    private static final String FILE2_UUID = UUID.randomUUID().toString();
+    private static String TEST_INITIAL_FILE_PARAMS;
+    private static String TEST_INITIAL_FILE2_PARAMS;
+
     private String submissionUUID = UUID.randomUUID().toString();
 
-    @Autowired
+    @SpyBean
     FileContentValidationHandler validationHandler;
+
+    @BeforeClass
+    public static void testInit() {
+        TEST_INITIAL_FILE_PARAMS = "validationResultUUID=" + VALIDATION_RESULT_UUID + ","
+                + "validationResultVersion=0,"
+                + "fileUUID=" + FILE_UUID + ",";
+        TEST_INITIAL_FILE2_PARAMS = "validationResultUUID=" + VALIDATION_RESULT2_UUID + ","
+                + "validationResultVersion=0,"
+                + "fileUUID=" + FILE2_UUID + ",";
+    }
+
+    @After
+    public void tearDown() throws IOException {
+        deleteReportFileFolderAfterTestExecution();
+    }
 
     @Test
     public void invalidBAM() throws IOException {
-        SubmissionFiles<FileType> submissionFiles = getSubmissionFiles(FileType.BAM, "reads/invalid.bam");
-        ReadsManifest readsManifest = getReadsManifest(submissionFiles);
+        final String testFilePath = "reads/invalid.bam";
+        String filesParam = TEST_INITIAL_FILE_PARAMS + "filePath=" + testFilePath;
+        final CommandLineParameters commandLineParameters = CommandLineParametersBuilder.build(filesParam,
+                FileType.BAM.toString(), submissionUUID);
+        validationHandler.setCommandLineParameters(commandLineParameters);
+        doReturn(getResourceFile(testFilePath)).when(this.validationHandler).getData(anyString());
 
-        assertThat(submissionFiles.get(FileType.BAM).size()).isOne();
-
-        assertThatThrownBy(() -> validationHandler.handleFileContentValidation(readsManifest, submissionUUID))
-                .isInstanceOf(FileContentValidationException.class)
-                .hasMessage("Validation error has happened");
+        assertThat(validationHandler.handleFileContentValidation().getStatus(), is(equalTo(ValidationResponse.status.VALIDATION_ERROR)));
 
         new ReportTester(validationHandler.getValidationDir()).textInFileReport("invalid.bam", "File contains no valid reads");
 
@@ -55,28 +83,28 @@ public class ReadsValidationTest {
 
     @Test
     public void validBAM() throws IOException {
-        SubmissionFiles<FileType> submissionFiles = getSubmissionFiles(FileType.BAM, "reads/valid.bam");
-        ReadsManifest readsManifest = getReadsManifest(submissionFiles);
+        final String testFilePath = "reads/valid.bam";
+        String filesParam = TEST_INITIAL_FILE_PARAMS + "filePath=" + testFilePath;
+        final CommandLineParameters commandLineParameters =
+                CommandLineParametersBuilder.build(filesParam, FileType.BAM.toString(), submissionUUID);
+        validationHandler.setCommandLineParameters(commandLineParameters);
+        doReturn(getResourceFile(testFilePath)).when(this.validationHandler).getData(anyString());
 
-        assertThat(submissionFiles.get().size()).isEqualTo(1);
-        assertThat(submissionFiles.get(FileType.BAM).size()).isOne();
-
-        validationHandler.handleFileContentValidation(readsManifest, submissionUUID);
+        assertThat(validationHandler.handleFileContentValidation().getStatus(), is(equalTo(ValidationResponse.status.VALIDATION_SUCCESS)));
 
         printReportFileContent(validationHandler.getValidationDir());
     }
 
     @Test
     public void invalidFastQ() throws IOException {
-        SubmissionFiles<FileType> submissionFiles = getSubmissionFiles(FileType.FASTQ, "reads/invalid.fastq.gz");
-        ReadsManifest readsManifest = getReadsManifest(submissionFiles);
+        final String testFilePath = "reads/invalid.fastq.gz";
+        String filesParam = TEST_INITIAL_FILE_PARAMS + "filePath=" + testFilePath;
+        final CommandLineParameters commandLineParameters =
+                CommandLineParametersBuilder.build(filesParam, FileType.FASTQ.toString(), submissionUUID);
+        validationHandler.setCommandLineParameters(commandLineParameters);
+        doReturn(getResourceFile(testFilePath)).when(this.validationHandler).getData(anyString());
 
-        assertThat(submissionFiles.get().size()).isEqualTo(1);
-        assertThat(submissionFiles.get(FileType.FASTQ).size()).isOne();
-
-        assertThatThrownBy(() -> validationHandler.handleFileContentValidation(readsManifest, submissionUUID))
-                .isInstanceOf(FileContentValidationException.class)
-                .hasMessage("Validation error has happened");
+        assertThat(validationHandler.handleFileContentValidation().getStatus(), is(equalTo(ValidationResponse.status.VALIDATION_ERROR)));
 
         new ReportTester(validationHandler.getValidationDir()).textInFileReport("invalid.fastq.gz", "does not match FASTQ regexp");
 
@@ -85,61 +113,67 @@ public class ReadsValidationTest {
 
     @Test
     public void validFastQ() throws IOException {
-        SubmissionFiles<FileType> submissionFiles = getSubmissionFiles(FileType.FASTQ, "reads/valid.fastq.gz");
-        ReadsManifest readsManifest = getReadsManifest(submissionFiles);
+        final String testFilePath = "reads/valid.fastq.gz";
+        String filesParam = TEST_INITIAL_FILE_PARAMS + "filePath=" + testFilePath;
+        final CommandLineParameters commandLineParameters =
+                CommandLineParametersBuilder.build(filesParam, FileType.FASTQ.toString(), submissionUUID);
+        validationHandler.setCommandLineParameters(commandLineParameters);
+        doReturn(getResourceFile(testFilePath)).when(this.validationHandler).getData(testFilePath);
 
-        assertThat(submissionFiles.get().size()).isEqualTo(1);
-        assertThat(submissionFiles.get(FileType.FASTQ).size()).isOne();
-
-        validationHandler.handleFileContentValidation(readsManifest, submissionUUID);
+        assertThat(validationHandler.handleFileContentValidation().getStatus(), is(equalTo(ValidationResponse.status.VALIDATION_SUCCESS)));
 
         printReportFileContent(validationHandler.getValidationDir());
     }
 
     @Test
     public void validPairedFastQTwoFiles() throws IOException {
-        SubmissionFiles<FileType> submissionFiles = getSubmissionFiles(FileType.FASTQ,
-                "reads/valid_paired_1.fastq.gz", "reads/valid_paired_2.fastq.gz");
-        ReadsManifest readsManifest = getReadsManifest(submissionFiles);
+        final String testFile1Path = "reads/valid_paired_1.fastq.gz";
+        final String testFile2Path = "reads/valid_paired_2.fastq.gz";
+        String filesParam = TEST_INITIAL_FILE_PARAMS + "filePath=" + testFile1Path + ";"
+                + TEST_INITIAL_FILE2_PARAMS + "filePath=" + testFile2Path;
+        final CommandLineParameters commandLineParameters =
+                CommandLineParametersBuilder.build(filesParam, FileType.FASTQ.toString(), submissionUUID);
+        validationHandler.setCommandLineParameters(commandLineParameters);
+        doReturn(getResourceFile(testFile1Path)).when(this.validationHandler).getData(testFile1Path);
+        doReturn(getResourceFile(testFile2Path)).when(this.validationHandler).getData(testFile2Path);
 
-        assertThat(submissionFiles.get().size()).isEqualTo(2);
-        assertThat(submissionFiles.get(FileType.FASTQ).size()).isEqualTo(2);
+        final ReadsValidationResponse validationResponse = (ReadsValidationResponse) validationHandler.handleFileContentValidation();
+        assertThat(validationResponse.getStatus(), is(equalTo(ValidationResponse.status.VALIDATION_SUCCESS)));
 
-        validationHandler.handleFileContentValidation(readsManifest, submissionUUID);
-
-        assertThat(validationHandler.getValidationResponse().isPaired());
+        assertThat(validationResponse.isPaired(), is(equalTo(Boolean.TRUE)));
 
         printReportFileContent(validationHandler.getValidationDir());
     }
 
     @Test
     public void validPairedFastQOneFile() throws IOException {
-        SubmissionFiles<FileType> submissionFiles = getSubmissionFiles(FileType.FASTQ,
-                "reads/valid_paired_single_fastq.gz");
-        ReadsManifest readsManifest = getReadsManifest(submissionFiles);
+        final String testFilePath = "reads/valid_paired_single_fastq.gz";
+        String filesParam = TEST_INITIAL_FILE_PARAMS + "filePath=" + testFilePath;
+        final CommandLineParameters commandLineParameters =
+                CommandLineParametersBuilder.build(filesParam, FileType.FASTQ.toString(), submissionUUID);
+        validationHandler.setCommandLineParameters(commandLineParameters);
+        doReturn(getResourceFile(testFilePath)).when(this.validationHandler).getData(testFilePath);
 
-        assertThat(submissionFiles.get().size()).isEqualTo(1);
-        assertThat(submissionFiles.get(FileType.FASTQ).size()).isOne();
+        final ReadsValidationResponse validationResponse = (ReadsValidationResponse) validationHandler.handleFileContentValidation();
 
-        validationHandler.handleFileContentValidation(readsManifest, submissionUUID);
-
-        assertThat(validationHandler.getValidationResponse().isPaired());
+        assertThat(validationResponse.isPaired(), is(equalTo(Boolean.TRUE)));
 
         printReportFileContent(validationHandler.getValidationDir());
     }
 
     @Test
     public void invalidPairedFastQTwoFiles() throws IOException {
-        SubmissionFiles<FileType> submissionFiles = getSubmissionFiles(FileType.FASTQ,
-                "reads/invalid_not_paired_1.fastq.gz", "reads/invalid_not_paired_2.fastq.gz");
-        ReadsManifest readsManifest = getReadsManifest(submissionFiles);
+        final String testFile1Path = "reads/invalid_not_paired_1.fastq.gz";
+        final String testFile2Path = "reads/invalid_not_paired_2.fastq.gz";
+        String filesParam = TEST_INITIAL_FILE_PARAMS + "filePath=" + testFile1Path + ";"
+                + TEST_INITIAL_FILE2_PARAMS + "filePath=" + testFile2Path;
+        final CommandLineParameters commandLineParameters =
+                CommandLineParametersBuilder.build(filesParam, FileType.FASTQ.toString(), submissionUUID);
+        validationHandler.setCommandLineParameters(commandLineParameters);
+        doReturn(getResourceFile(testFile1Path)).when(this.validationHandler).getData(testFile1Path);
+        doReturn(getResourceFile(testFile2Path)).when(this.validationHandler).getData(testFile2Path);
 
-        assertThat(submissionFiles.get().size()).isEqualTo(2);
-        assertThat(submissionFiles.get(FileType.FASTQ).size()).isEqualTo(2);
-
-        assertThatThrownBy(() -> validationHandler.handleFileContentValidation(readsManifest, submissionUUID))
-                .isInstanceOf(FileContentValidationException.class)
-                .hasMessage("Validation error has happened");
+        assertThat(validationHandler.handleFileContentValidation().getStatus(), is(equalTo(ValidationResponse.status.VALIDATION_ERROR)));
 
         new ReportTester(validationHandler.getValidationDir()).textInSubmissionReport( "Detected paired fastq submission with less than 20% of paired reads");
 
@@ -148,16 +182,17 @@ public class ReadsValidationTest {
 
     @Test
     public void sameFilePairedFastq() throws IOException {
-        SubmissionFiles<FileType> submissionFiles = getSubmissionFiles(FileType.FASTQ,
-                "reads/valid.fastq.gz", "reads/valid.fastq.gz");
-        ReadsManifest readsManifest = getReadsManifest(submissionFiles);
+        final String testFile1Path = "reads/valid.fastq.gz";
+        final String testFile2Path = "reads/valid.fastq.gz";
+        String filesParam = TEST_INITIAL_FILE_PARAMS + "filePath=" + testFile1Path + ";"
+                + TEST_INITIAL_FILE2_PARAMS + "filePath=" + testFile2Path;
+        final CommandLineParameters commandLineParameters =
+                CommandLineParametersBuilder.build(filesParam, FileType.FASTQ.toString(), submissionUUID);
+        validationHandler.setCommandLineParameters(commandLineParameters);
+        doReturn(getResourceFile(testFile1Path)).when(this.validationHandler).getData(testFile1Path);
+        doReturn(getResourceFile(testFile2Path)).when(this.validationHandler).getData(testFile2Path);
 
-        assertThat(submissionFiles.get().size()).isEqualTo(2);
-        assertThat(submissionFiles.get(FileType.FASTQ).size()).isEqualTo(2);
-
-        assertThatThrownBy(() -> validationHandler.handleFileContentValidation(readsManifest, submissionUUID))
-                .isInstanceOf(FileContentValidationException.class)
-                .hasMessage("Validation error has happened");
+        assertThat(validationHandler.handleFileContentValidation().getStatus(), is(equalTo(ValidationResponse.status.VALIDATION_ERROR)));
 
         new ReportTester(validationHandler.getValidationDir()).textInSubmissionReport( "Multiple (1) occurrences of read name");
 
@@ -166,16 +201,14 @@ public class ReadsValidationTest {
 
     @Test
     public void invalidCram() throws IOException {
-        SubmissionFiles<FileType> submissionFiles = getSubmissionFiles(FileType.CRAM,
-                "reads/invalid.cram");
-        ReadsManifest readsManifest = getReadsManifest(submissionFiles);
+        final String testFilePath = "reads/invalid.cram";
+        String filesParam = TEST_INITIAL_FILE_PARAMS + "filePath=" + testFilePath;
+        final CommandLineParameters commandLineParameters =
+                CommandLineParametersBuilder.build(filesParam, FileType.CRAM.toString(), submissionUUID);
+        validationHandler.setCommandLineParameters(commandLineParameters);
+        doReturn(getResourceFile(testFilePath)).when(this.validationHandler).getData(testFilePath);
 
-        assertThat(submissionFiles.get().size()).isEqualTo(1);
-        assertThat(submissionFiles.get(FileType.CRAM).size()).isOne();
-
-        assertThatThrownBy(() -> validationHandler.handleFileContentValidation(readsManifest, submissionUUID))
-                .isInstanceOf(FileContentValidationException.class)
-                .hasMessage("Validation error has happened");
+        assertThat(validationHandler.handleFileContentValidation().getStatus(), is(equalTo(ValidationResponse.status.VALIDATION_ERROR)));
 
         new ReportTester(validationHandler.getValidationDir()).textInFileReport( "invalid.cram", "File contains no valid reads");
 
@@ -184,36 +217,16 @@ public class ReadsValidationTest {
 
     @Test
     public void validCram() throws IOException {
-        SubmissionFiles<FileType> submissionFiles = getSubmissionFiles(FileType.CRAM,
-                "reads/valid.cram");
-        ReadsManifest readsManifest = getReadsManifest(submissionFiles);
+        final String testFilePath = "reads/valid.cram";
+        String filesParam = TEST_INITIAL_FILE_PARAMS + "filePath=" + testFilePath;
+        final CommandLineParameters commandLineParameters =
+                CommandLineParametersBuilder.build(filesParam, FileType.CRAM.toString(), submissionUUID);
+        validationHandler.setCommandLineParameters(commandLineParameters);
+        doReturn(getResourceFile(testFilePath)).when(this.validationHandler).getData(testFilePath);
 
-        assertThat(submissionFiles.get().size()).isEqualTo(1);
-        assertThat(submissionFiles.get(FileType.CRAM).size()).isOne();
-
-        validationHandler.handleFileContentValidation(readsManifest, submissionUUID);
+        assertThat(validationHandler.handleFileContentValidation().getStatus(), is(equalTo(ValidationResponse.status.VALIDATION_SUCCESS)));
 
         printReportFileContent(validationHandler.getValidationDir());
-    }
-
-    @NotNull
-    private SubmissionFiles<FileType> getSubmissionFiles(FileType fileType, String... filePaths) {
-        SubmissionFiles<FileType> submissionFiles = new SubmissionFiles<>();
-
-        for (String filePath : filePaths) {
-            SubmissionFile<FileType> submissionFile =
-                    new SubmissionFile<>(fileType, getResourceFile(filePath));
-            submissionFiles.add(submissionFile);
-
-        }
-        return submissionFiles;
-    }
-
-    @NotNull
-    private ReadsManifest getReadsManifest(SubmissionFiles<FileType> submissionFiles) {
-        ReadsManifest readsManifest = new ReadsManifest();
-        readsManifest.setFiles(submissionFiles);
-        return readsManifest;
     }
 
     private void printReportFileContent(File reportFilePath) throws IOException {
@@ -222,9 +235,18 @@ public class ReadsValidationTest {
                 .resolve(FILE_CONTENT_VALIDATION_REPORT_FILENAME).toAbsolutePath()).forEach(System.out::println);
     }
 
-    public static File getResourceFile(String filename) {
+    private File getResourceFile(String filename) {
         return new File(
                 Objects.requireNonNull(ReadsValidationTest.class.getClassLoader().getResource(filename)).getFile()
         );
+    }
+
+    private void deleteReportFileFolderAfterTestExecution() throws IOException {
+        Path folderToRemove = validationHandler.getOutputDir().getParentFile().toPath();
+
+        Files.walk(folderToRemove)
+                .sorted(Comparator.reverseOrder())
+                .map(Path::toFile)
+                .forEach(File::delete);
     }
 }
