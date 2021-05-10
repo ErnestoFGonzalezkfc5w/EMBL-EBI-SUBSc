@@ -1,4 +1,4 @@
-package uk.ac.ebi.ait.filecontentvalidatorservice.reads;
+package uk.ac.ebi.ait.filecontentvalidatorservice.service.reads;
 
 import org.junit.After;
 import org.junit.BeforeClass;
@@ -20,9 +20,6 @@ import uk.ac.ebi.ena.webin.cli.validator.response.ReadsValidationResponse;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.Comparator;
-import java.util.Objects;
 import java.util.UUID;
 
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -30,6 +27,8 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doReturn;
+import static uk.ac.ebi.ait.filecontentvalidatorservice.service.ValidationHelper.deleteReportFileFolderAfterTestExecution;
+import static uk.ac.ebi.ait.filecontentvalidatorservice.service.ValidationHelper.getResourceFile;
 
 @RunWith(SpringRunner.class)
 @SpringBootTest
@@ -62,7 +61,7 @@ public class ReadsValidationTest {
 
     @After
     public void tearDown() throws IOException {
-        deleteReportFileFolderAfterTestExecution();
+        deleteReportFileFolderAfterTestExecution(validationHandler.getOutputDir());
     }
 
     @Test
@@ -233,20 +232,5 @@ public class ReadsValidationTest {
         System.out.println("Validation Report file content:");
         Files.lines(reportFilePath.toPath()
                 .resolve(FILE_CONTENT_VALIDATION_REPORT_FILENAME).toAbsolutePath()).forEach(System.out::println);
-    }
-
-    private File getResourceFile(String filename) {
-        return new File(
-                Objects.requireNonNull(ReadsValidationTest.class.getClassLoader().getResource(filename)).getFile()
-        );
-    }
-
-    private void deleteReportFileFolderAfterTestExecution() throws IOException {
-        Path folderToRemove = validationHandler.getOutputDir().getParentFile().toPath();
-
-        Files.walk(folderToRemove)
-                .sorted(Comparator.reverseOrder())
-                .map(Path::toFile)
-                .forEach(File::delete);
     }
 }

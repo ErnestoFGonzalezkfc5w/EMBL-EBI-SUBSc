@@ -11,10 +11,7 @@ import uk.ac.ebi.ait.filecontentvalidatorservice.dto.SingleValidationResult;
 import uk.ac.ebi.ait.filecontentvalidatorservice.dto.SingleValidationResultStatus;
 import uk.ac.ebi.ait.filecontentvalidatorservice.dto.ValidationAuthor;
 
-import java.io.File;
-import java.net.URL;
 import java.util.List;
-import java.util.Objects;
 import java.util.UUID;
 
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -22,6 +19,7 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.Matchers.emptyIterable;
 import static org.junit.Assert.assertThat;
+import static uk.ac.ebi.ait.filecontentvalidatorservice.service.ValidationHelper.resourceToAbsolutePath;
 
 @RunWith(SpringRunner.class)
 @SpringBootTest
@@ -29,7 +27,7 @@ public class CommandLineParameterValidatorTest {
 
     private static final String TEST_FILE_INVALID_PATH = "/invalid/path";
     private static final String TEST_FILE_FOR_FILE_CONTENT_VALIDATION = "test_file_for_file_content_validation.txt";
-    private static final String TEST_FILE_PATH = resourceToAbsolutePath();
+    private static final String TEST_FILE_PATH = resourceToAbsolutePath(TEST_FILE_FOR_FILE_CONTENT_VALIDATION);
     private static final String VALIDATION_RESULT_UUID = "112233-aabbcc-223344";
     private static final String FILE_UUID = "9999-aabbcc-223344";
     private static final String FILE_TYPE = "fastQ";
@@ -88,13 +86,5 @@ public class CommandLineParameterValidatorTest {
                 CommandLineParametersBuilder.build(filesParam, FILE_TYPE, SUBMISSION_UUID);
 
         assertThat(commandLineParameterValidator.validateParameters(commandLineParams), emptyIterable());
-    }
-
-    private static String resourceToAbsolutePath(){
-        ClassLoader classloader = Thread.currentThread().getContextClassLoader();
-        URL is = classloader.getResource(TEST_FILE_FOR_FILE_CONTENT_VALIDATION);
-        File file = new File(Objects.requireNonNull(is).getFile());
-
-        return file.getAbsolutePath();
     }
 }
