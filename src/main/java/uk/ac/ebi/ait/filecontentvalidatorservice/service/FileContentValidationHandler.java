@@ -24,7 +24,9 @@ import uk.ac.ebi.ena.webin.cli.validator.file.SubmissionFiles;
 import uk.ac.ebi.ena.webin.cli.validator.manifest.ReadsManifest;
 import uk.ac.ebi.ena.webin.cli.validator.response.ReadsValidationResponse;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileReader;
 import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -168,7 +170,7 @@ public class FileContentValidationHandler {
 
     private List<SingleValidationResult> parseResultFile(String fileUUID, File reportFile) {
         List<SingleValidationResult> validationResults = new ArrayList<>();
-        try (Scanner scanner = new Scanner(reportFile)) {
+        try (Scanner scanner = new Scanner(new BufferedReader(new FileReader(reportFile)))) {
             while (scanner.hasNext()) {
                 String message = scanner.nextLine();
 
