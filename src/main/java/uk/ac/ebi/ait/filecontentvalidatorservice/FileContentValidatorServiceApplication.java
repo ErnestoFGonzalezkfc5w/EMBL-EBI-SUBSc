@@ -9,6 +9,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.ConfigurableApplicationContext;
 import uk.ac.ebi.ait.filecontentvalidatorservice.service.FileContentValidationHandler;
+import uk.ac.ebi.ena.webin.cli.validator.api.ValidationResponse;
 
 @SpringBootApplication
 @RequiredArgsConstructor
@@ -33,7 +34,9 @@ public class FileContentValidatorServiceApplication implements ApplicationRunner
 		if (!args.getOptionNames().isEmpty()) {
 			log.info("File content validation started for file(s): {}", args.getOptionValues(FILE_PATH_OPTION));
 
-			fileContentValidationHandler.handleFileContentValidation();
+			final ValidationResponse validationResponse = fileContentValidationHandler.handleFileContentValidation();
+
+			fileContentValidationHandler.sendValidationMessagesToAggregator(validationResponse);
 		}
 	}
 }

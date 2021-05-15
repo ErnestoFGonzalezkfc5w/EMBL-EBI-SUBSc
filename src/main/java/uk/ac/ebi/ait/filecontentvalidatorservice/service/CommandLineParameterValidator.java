@@ -1,6 +1,5 @@
 package uk.ac.ebi.ait.filecontentvalidatorservice.service;
 
-import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import uk.ac.ebi.ait.filecontentvalidatorservice.config.CommandLineParameters;
@@ -18,9 +17,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class CommandLineParameterValidator {
 
-    @NonNull
-    private SingleValidationResultBuilder singleValidationResultBuilder;
-
     public List<SingleValidationResult> validateParameters(CommandLineParameters commandLineParams) {
 
         List<SingleValidationResult> validationErrors = new ArrayList<>(validateFileExistence(commandLineParams));
@@ -36,7 +32,7 @@ public class CommandLineParameterValidator {
             String filePath = fileParams.getFilePath();
             File file = new File(filePath);
             if (!file.exists() || file.isDirectory()) {
-                fileExistenceErrors.add(singleValidationResultBuilder.buildSingleValidationResultWithErrorStatus(
+                fileExistenceErrors.add(SingleValidationResultBuilder.buildSingleValidationResultWithErrorStatus(
                         String.format(ErrorMessages.FILE_NOT_FOUND_BY_TARGET_PATH, filePath), fileParams.getFileUUID()));
             }
         });
@@ -51,7 +47,7 @@ public class CommandLineParameterValidator {
                 .collect(Collectors.joining(", "));
         if (!FileType.isSupported(fileType)) {
             return Optional.of(
-                    singleValidationResultBuilder.buildSingleValidationResultWithErrorStatus(
+                    SingleValidationResultBuilder.buildSingleValidationResultWithErrorStatus(
                             String.format(ErrorMessages.FILE_TYPE_NOT_SUPPORTED, fileType), fileUUIDs));
         }
 

@@ -1,13 +1,21 @@
 package uk.ac.ebi.ait.filecontentvalidatorservice.service;
 
+import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
+import org.springframework.amqp.rabbit.core.RabbitMessagingTemplate;
 import org.springframework.stereotype.Service;
 import uk.ac.ebi.ait.filecontentvalidatorservice.config.CommandLineParameters;
 import uk.ac.ebi.ait.filecontentvalidatorservice.config.FileParameters;
 import uk.ac.ebi.ait.filecontentvalidatorservice.config.ReportFileConfig;
+import uk.ac.ebi.ait.filecontentvalidatorservice.dto.SingleValidationResult;
+import uk.ac.ebi.ait.filecontentvalidatorservice.dto.SingleValidationResultBuilder;
+import uk.ac.ebi.ait.filecontentvalidatorservice.dto.SingleValidationResultStatus;
+import uk.ac.ebi.ait.filecontentvalidatorservice.dto.SingleValidationResultsEnvelope;
+import uk.ac.ebi.ait.filecontentvalidatorservice.dto.ValidationAuthor;
 import uk.ac.ebi.ait.filecontentvalidatorservice.exception.FileContentValidationException;
+import uk.ac.ebi.ait.filecontentvalidatorservice.exception.FileHandleException;
 import uk.ac.ebi.ait.filecontentvalidatorservice.utils.FileContentValidatorMessages;
 import uk.ac.ebi.ena.readtools.validator.ReadsValidator;
 import uk.ac.ebi.ena.webin.cli.validator.api.ValidationResponse;
@@ -16,9 +24,21 @@ import uk.ac.ebi.ena.webin.cli.validator.file.SubmissionFiles;
 import uk.ac.ebi.ena.webin.cli.validator.manifest.ReadsManifest;
 import uk.ac.ebi.ena.webin.cli.validator.response.ReadsValidationResponse;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Scanner;
+import java.util.stream.Collectors;
 
+import static uk.ac.ebi.ait.filecontentvalidatorservice.service.ErrorMessages.SUBMISSION_FILE_COULD_NOT_BE_FOUND;
+import static uk.ac.ebi.ait.filecontentvalidatorservice.service.ErrorMessages.VALIDATION_REPORT_FILE_ERROR;
 import static uk.ac.ebi.ait.filecontentvalidatorservice.utils.FileUtil.createOutputDir;
 import static uk.ac.ebi.ait.filecontentvalidatorservice.utils.FileUtil.emptyDirectory;
 
@@ -28,18 +48,30 @@ public class FileContentValidationHandler {
 
     private static final String REPORT_FILE = "file-content-validation.report";
 
+    private static final String SUBMISSION_EXCHANGE = "usi-1:submission-exchange";
+    private static final String EVENT_VALIDATION_SUCCESS = "validation.success";
+    private static final String EVENT_VALIDATION_ERROR = "validation.error";
+
     ReportFileConfig reportFileConfig;
     ReadsValidator validator;
     ReadsValidationResponse validationResponse;
     CommandLineParameters commandLineParameters;
+    ReadsManifest manifest;
+
+    @NonNull
+    private RabbitMessagingTemplate rabbitMessagingTemplate;
 
     private File validationDir;
     private File processDir;
 
-    public FileContentValidationHandler(ReportFileConfig reportFileConfig, CommandLineParameters commandLineParameters) {
+    private Map<String, SubmissionFile> submissionFileByFileUUID = new HashMap<>();
+
+    public FileContentValidationHandler(ReportFileConfig reportFileConfig, CommandLineParameters commandLineParameters,
+                                        RabbitMessagingTemplate rabbitMessagingTemplate) {
         this.validator = new ReadsValidator();
         this.reportFileConfig = reportFileConfig;
         this.commandLineParameters = commandLineParameters;
+        this.rabbitMessagingTemplate = rabbitMessagingTemplate;
     }
 
     public File getValidationDir() {
@@ -59,7 +91,7 @@ public class FileContentValidationHandler {
     }
 
     public ValidationResponse handleFileContentValidation() {
-        ReadsManifest manifest = getReadsManifest();
+        manifest = getReadsManifest();
         String submissionUUID = commandLineParameters.getSubmissionUUID();
 
         this.validationDir = createSubmissionDir(ReportFileConfig.VALIDATE_DIR, submissionUUID);
@@ -91,6 +123,70 @@ public class FileContentValidationHandler {
         return validationResponse;
     }
 
+    public void sendValidationMessagesToAggregator(ValidationResponse validationResponse) {
+        commandLineParameters.getFilesData().forEach(fileParameters -> {
+            List<SingleValidationResult> validationResultByFileUUID =
+                    createValidationResultByFileUUID(validationResponse, fileParameters.getFileUUID());
+            SingleValidationResultsEnvelope singleValidationResultsEnvelope =
+                    generateSingleValidationResultsEnvelope(validationResultByFileUUID,
+                            Integer.parseInt(fileParameters.getValidationResultVersion()),
+                            fileParameters.getValidationResultUUID());
+            sendValidationMessageToAggregator(singleValidationResultsEnvelope);
+        });
+    }
+
+    public List<SingleValidationResult> createValidationResultByFileUUID(ValidationResponse validationResponse, String fileUUID) {
+        List<SingleValidationResult> validationResults = new ArrayList<>();
+        if (validationResponse.getStatus().equals(ValidationResponse.status.VALIDATION_SUCCESS)) {
+            validationResults.add(SingleValidationResultBuilder.buildSingleValidationResultWithPassStatus(fileUUID));
+        } else {
+            validationResults.addAll(parseResultFiles(fileUUID));
+        }
+
+        return validationResults;
+    }
+
+    private List<SingleValidationResult> parseResultFiles(String fileUUID) {
+        List<SingleValidationResult> validationResults = new ArrayList<>();
+
+        final SubmissionFile submissionFile = submissionFileByFileUUID.get(fileUUID);
+        if (submissionFile == null) {
+            throw new FileContentValidationException(String.format(SUBMISSION_FILE_COULD_NOT_BE_FOUND, fileUUID));
+        }
+
+        validationResults.addAll(parseResultFile(fileUUID, submissionFile.getReportFile()));
+
+        validationResults.addAll(parseCommonResultFile(fileUUID));
+
+        return validationResults;
+    }
+
+    private List<SingleValidationResult> parseCommonResultFile(String fileUUID) {
+        List<SingleValidationResult> validationResults = new ArrayList<>();
+        validationResults.addAll(parseResultFile(fileUUID, getSubmissionReportFile()));
+
+        return validationResults;
+    }
+
+    private List<SingleValidationResult> parseResultFile(String fileUUID, File reportFile) {
+        List<SingleValidationResult> validationResults = new ArrayList<>();
+        try (Scanner scanner = new Scanner(new BufferedReader(new FileReader(reportFile)))) {
+            while (scanner.hasNext()) {
+                String message = scanner.nextLine();
+
+                if (message.startsWith("ERROR: ")) {
+                    message = message.replace("ERROR: ", "");
+                    validationResults.add(
+                            SingleValidationResultBuilder.buildSingleValidationResultWithErrorStatus(message, fileUUID));
+                }
+            }
+        } catch (IOException ex) {
+            throw new FileHandleException(String.format(VALIDATION_REPORT_FILE_ERROR, fileUUID));
+        }
+
+        return validationResults;
+    }
+
     @NotNull
     private SubmissionFiles<ReadsManifest.FileType> getSubmissionFiles(ReadsManifest.FileType fileType, String... filePaths) {
         SubmissionFiles<ReadsManifest.FileType> submissionFiles = new SubmissionFiles<>();
@@ -100,8 +196,18 @@ public class FileContentValidationHandler {
                     new SubmissionFile<>(fileType, getData(filePath));
             submissionFiles.add(submissionFile);
 
+            getFileUUIDByFilePath(filePath).ifPresent(fileUUID ->
+                submissionFileByFileUUID.put(fileUUID, submissionFile)
+            );
         }
         return submissionFiles;
+    }
+
+    private Optional<String> getFileUUIDByFilePath(String filePath) {
+        return commandLineParameters.getFilesData().stream()
+                .filter(fileParameter -> fileParameter.getFilePath().equals(filePath))
+                .map(FileParameters::getFileUUID)
+                .findFirst();
     }
 
     @NotNull
@@ -142,4 +248,27 @@ public class FileContentValidationHandler {
         return new File(filename);
     }
 
+    private SingleValidationResultsEnvelope generateSingleValidationResultsEnvelope(
+            List<SingleValidationResult> singleValidationResults, int validationResultVersion,
+            String validationResultUUID) {
+        return new SingleValidationResultsEnvelope(
+                singleValidationResults,
+                validationResultVersion,
+                validationResultUUID,
+                ValidationAuthor.FileContent
+        );
+    }
+
+    private void sendValidationMessageToAggregator(SingleValidationResultsEnvelope envelope) {
+        List<SingleValidationResult> errorResults =
+                envelope.getSingleValidationResults().stream()
+                        .filter(svr -> svr.getValidationStatus().equals(SingleValidationResultStatus.Error))
+                        .collect(Collectors.toList());
+
+        if (errorResults.size() > 0) {
+            rabbitMessagingTemplate.convertAndSend(SUBMISSION_EXCHANGE, EVENT_VALIDATION_ERROR, envelope);
+        } else {
+            rabbitMessagingTemplate.convertAndSend(SUBMISSION_EXCHANGE, EVENT_VALIDATION_SUCCESS, envelope);
+        }
+    }
 }
