@@ -2,11 +2,16 @@ plugins {
 	id 'org.springframework.boot' version '2.2.4.RELEASE'
 	id 'io.spring.dependency-management' version '1.0.9.RELEASE'
 	id 'java'
+	id 'org.hidetake.ssh' version "2.10.1"
 }
 
 group = 'uk.ac.ebi.ait'
-version = '0.1.0-SNAPSHOT'
-sourceCompatibility = JavaVersion.VERSION_1_8
+version = '0.1.1-SNAPSHOT'
+
+java {
+	sourceCompatibility = JavaVersion.VERSION_1_8
+	targetCompatibility = JavaVersion.VERSION_1_8
+}
 
 configurations {
 	developmentOnly
@@ -47,4 +52,104 @@ test {
 	useJUnitPlatform()
 
 	maxHeapSize = "3G"
+}
+
+bootJar {
+	launchScript()
+}
+
+ext.gradle_env = hasProperty('env') ? env : 'dev'
+
+remotes {
+	devFCVOnCluster {
+		role('dev')
+		host = project.hasProperty(project.name + "DevOnClusterDeployTarget") ? getProperty(project.name + "DevOnClusterDeployTarget") : 'localhost'
+	}
+	devFCVOnFUSHH {
+		role('dev')
+		host = project.hasProperty(project.name + "DevOnFUSHHDeployTarget") ? getProperty(project.name + "DevOnFUSHHDeployTarget") : 'localhost'
+	}
+	testFCVOnCluster {
+		role('test')
+		host = project.hasProperty(project.name + "TestOnClusterDeployTarget") ? getProperty(project.name + "TestOnClusterDeployTarget") : 'localhost'
+	}
+	testFCVOnFUSHH1 {
+		role('test')
+		host = project.hasProperty(project.name + "TestOnFUSHH1DeployTarget") ? getProperty(project.name + "TestOnFUSHH1DeployTarget") : 'localhost'
+	}
+	testFCVOnFUSHH2 {
+		role('test')
+		host = project.hasProperty(project.name + "TestOnFUSHH2DeployTarget") ? getProperty(project.name + "TestOnFUSHH2DeployTarget") : 'localhost'
+	}
+	prodFCVOnCluster {
+		role('prod')
+		host = project.hasProperty(project.name + "ProdOnClusterDeployTarget") ? getProperty(project.name + "ProdOnClusterDeployTarget") : 'localhost'
+	}
+	prodFCVOnFUSHH1 {
+		role('prod')
+		host = project.hasProperty(project.name + "ProdOnFUSHH1DeployTarget") ? getProperty(project.name + "ProdOnFUSHH1DeployTarget") : 'localhost'
+	}
+	prodFCVOnFUSHH2 {
+		role('prod')
+		host = project.hasProperty(project.name + "ProdOnFUSHH2DeployTarget") ? getProperty(project.name + "ProdOnFUSHH2DeployTarget") : 'localhost'
+	}
+	prodFCVOnFUSHH3 {
+		role('prod')
+		host = project.hasProperty(project.name + "ProdOnFUSHH3DeployTarget") ? getProperty(project.name + "ProdOnFUSHH3DeployTarget") : 'localhost'
+	}}
+
+ssh.settings {
+	user = 'sub_adm'
+}
+
+if (project.hasProperty('sshKeyFile')) {
+	ssh.settings.identity = new File(sshKeyFile)
+}
+
+if (project.hasProperty('sshPassphrase')) {
+	ssh.settings.passphrase = sshPassphrase
+}
+
+task deployJar(dependsOn: 'build') {
+	doLast {
+		sshRun()
+	}
+	ssh.settings {
+		knownHosts = allowAnyHosts
+	}
+}
+
+task testSsh() {
+	doLast {
+		sshTestRun()
+	}
+	ssh.settings {
+		knownHosts = allowAnyHosts
+	}
+}
+
+private Object sshRun() {
+	ssh.run {
+		session(remotes.role(gradle_env)) {
+			execute "/homes/sub_adm/create_dirs.sh $gradle_env $project.name", ignoreError: false
+			def jarFileName = project.name + "-"  + project.version + "." + System.currentTimeMillis() + ".jar"
+			File jarDeployFile = new File("/homes/sub_adm/apps/$env/$project.name/jar",jarFileName)
+			File jarDeployDir = jarDeployFile.getParentFile()
+			println "Uploading jar $jar.archivePath.name to $jarDeployFile.absolutePath area on $remote"
+			put(jar.archivePath.absolutePath, jarDeployFile.absolutePath)
+			println "creating symbolic link to $jar.archiveName"
+			def result = execute "ln -s -f $jarDeployFile.absolutePath $jarDeployDir/$jar.baseName" + ".jar", ignoreError: true
+			println result
+			println "updating permissions of $jarDeployDir/$jar.archiveName"
+			execute "chmod u+x $jarDeployDir/*", ignoreError: false
+		}
+	}
+}
+
+private Object sshTestRun(){
+	ssh.run {
+		session(remotes.role(gradle_env)){
+			println "started ssh session"
+		}
+	}
 }
