@@ -2,7 +2,7 @@ plugins {
 	id 'org.springframework.boot' version '2.2.4.RELEASE'
 	id 'io.spring.dependency-management' version '1.0.9.RELEASE'
 	id 'java'
-	id 'org.hidetake.ssh' version "2.10.1"
+	id 'org.hidetake.ssh' version '2.10.1'
 }
 
 group = 'uk.ac.ebi.ait'
@@ -97,7 +97,8 @@ remotes {
 	prodFCVOnFUSHH3 {
 		role('prod')
 		host = project.hasProperty(project.name + "ProdOnFUSHH3DeployTarget") ? getProperty(project.name + "ProdOnFUSHH3DeployTarget") : 'localhost'
-	}}
+	}
+}
 
 ssh.settings {
 	user = 'sub_adm'
@@ -137,7 +138,7 @@ private Object sshRun() {
 			File jarDeployFile = new File("/homes/sub_adm/apps/$env/$project.name/jar",jarFileName)
 			File jarDeployDir = jarDeployFile.getParentFile()
 			println "Uploading jar $jar.archivePath.name to $jarDeployFile.absolutePath area on $remote"
-			put(jar.archivePath.absolutePath, jarDeployFile.absolutePath)
+			put from: jar.archivePath.absolutePath, into: jarDeployFile.absolutePath
 			println "creating symbolic link to $jar.archiveName"
 			def result = execute "ln -s -f $jarDeployFile.absolutePath $jarDeployDir/$jar.baseName" + ".jar", ignoreError: true
 			println result
