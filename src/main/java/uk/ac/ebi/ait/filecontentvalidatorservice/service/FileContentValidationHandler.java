@@ -17,6 +17,7 @@ import uk.ac.ebi.ait.filecontentvalidatorservice.dto.ValidationAuthor;
 import uk.ac.ebi.ait.filecontentvalidatorservice.exception.FileContentValidationException;
 import uk.ac.ebi.ait.filecontentvalidatorservice.exception.FileHandleException;
 import uk.ac.ebi.ait.filecontentvalidatorservice.utils.FileContentValidatorMessages;
+import uk.ac.ebi.ait.filecontentvalidatorservice.utils.FileUtil;
 import uk.ac.ebi.ena.readtools.validator.ReadsValidator;
 import uk.ac.ebi.ena.webin.cli.validator.api.ValidationResponse;
 import uk.ac.ebi.ena.webin.cli.validator.file.SubmissionFile;
@@ -93,6 +94,9 @@ public class FileContentValidationHandler {
     public ValidationResponse handleFileContentValidation() {
         manifest = getReadsManifest();
         String submissionUUID = commandLineParameters.getSubmissionUUID();
+        String fileUUID = commandLineParameters.getFilesData().stream().map(FileParameters::getFileUUID).collect(Collectors.joining("_"));
+
+        reportFileConfig.setOutputDir(FileUtil.createTempDir(submissionUUID, fileUUID));
 
         this.validationDir = createSubmissionDir(ReportFileConfig.VALIDATE_DIR, submissionUUID);
         this.processDir = createSubmissionDir(ReportFileConfig.PROCESS_DIR, submissionUUID);
@@ -230,8 +234,9 @@ public class FileContentValidationHandler {
             throw new FileContentValidationException(
                     FileContentValidatorMessages.EXECUTOR_INIT_ERROR.format("Missing submission's UUID."));
         }
+
         File newDir =
-                createOutputDir(reportFileConfig.getOutputDir(), reportFileConfig.getContextType(), submissionUUID, dir);
+                createOutputDir(reportFileConfig.getOutputDir(), reportFileConfig.getContextType(), dir);
         if (!emptyDirectory(newDir)) {
             throw new FileContentValidationException(
                     FileContentValidatorMessages.EXECUTOR_EMPTY_DIRECTORY_ERROR.format(newDir));

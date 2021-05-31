@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Comparator;
 import java.util.Objects;
 
@@ -16,8 +17,8 @@ public class ValidationHelper {
         );
     }
 
-    public static  void deleteReportFileFolderAfterTestExecution(File outputDir) throws IOException {
-        Path folderToRemove = outputDir.getParentFile().toPath();
+    public static  void deleteReportFileFolderAfterTestExecution() throws IOException {
+        Path folderToRemove = Paths.get("temp");
 
         Files.walk(folderToRemove)
                 .sorted(Comparator.reverseOrder())

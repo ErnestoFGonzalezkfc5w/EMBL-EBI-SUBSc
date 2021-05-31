@@ -74,8 +74,8 @@ public class FileUtil {
 				.replaceAll("(?<=[^_])_+$", "");
 	}
 
-	public static File createTempDir() {
-			File folder = new File("temp/" + UUID.randomUUID().toString());
+	public static File createTempDir(String submissionUUID, String fileUUID) {
+			File folder = new File(String.join("/", "temp", submissionUUID, fileUUID, UUID.randomUUID().toString()));
 
 			assert(folder.mkdirs());
 
