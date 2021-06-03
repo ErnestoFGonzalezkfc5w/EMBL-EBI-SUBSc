@@ -18,24 +18,6 @@ public class FileUtil {
 		return new File(dir, Paths.get(filename).getFileName().toString() + suffix);
 	}
 
-	public static boolean emptyDirectory( File dir )
-	{
-		if (dir == null)
-			return false;
-	    if( dir.exists() )
-	    {
-	        File[] files = dir.listFiles();
-			for (File file : files) {
-				if (file.isDirectory()) {
-					emptyDirectory(file);
-				} else {
-					file.delete();
-				}
-			}
-	    }
-	    return dir.listFiles().length == 0;
-	}
-
 	public static File createOutputDir(File outputDir, String... dirs) {
 		if (outputDir == null) {
 			throw new FileHandleException(FileContentValidatorMessages.CLI_MISSING_OUTPUT_DIR_ERROR.text());

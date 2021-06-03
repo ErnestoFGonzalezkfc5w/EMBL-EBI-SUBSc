@@ -41,7 +41,6 @@ import java.util.stream.Collectors;
 import static uk.ac.ebi.ait.filecontentvalidatorservice.service.ErrorMessages.SUBMISSION_FILE_COULD_NOT_BE_FOUND;
 import static uk.ac.ebi.ait.filecontentvalidatorservice.service.ErrorMessages.VALIDATION_REPORT_FILE_ERROR;
 import static uk.ac.ebi.ait.filecontentvalidatorservice.utils.FileUtil.createOutputDir;
-import static uk.ac.ebi.ait.filecontentvalidatorservice.utils.FileUtil.emptyDirectory;
 
 @Service
 @Slf4j
@@ -235,13 +234,7 @@ public class FileContentValidationHandler {
                     FileContentValidatorMessages.EXECUTOR_INIT_ERROR.format("Missing submission's UUID."));
         }
 
-        File newDir =
-                createOutputDir(reportFileConfig.getOutputDir(), reportFileConfig.getContextType(), dir);
-        if (!emptyDirectory(newDir)) {
-            throw new FileContentValidationException(
-                    FileContentValidatorMessages.EXECUTOR_EMPTY_DIRECTORY_ERROR.format(newDir));
-        }
-        return newDir;
+        return createOutputDir(reportFileConfig.getOutputDir(), reportFileConfig.getContextType(), dir);
     }
 
     private File getSubmissionReportFile() {
