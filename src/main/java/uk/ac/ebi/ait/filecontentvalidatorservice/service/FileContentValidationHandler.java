@@ -184,7 +184,7 @@ public class FileContentValidationHandler {
                 }
             }
         } catch (IOException ex) {
-            throw new FileHandleException(String.format(VALIDATION_REPORT_FILE_ERROR, fileUUID));
+            throw new FileHandleException(String.format(VALIDATION_REPORT_FILE_ERROR, fileUUID, ex.getMessage()), ex);
         }
 
         return validationResults;
