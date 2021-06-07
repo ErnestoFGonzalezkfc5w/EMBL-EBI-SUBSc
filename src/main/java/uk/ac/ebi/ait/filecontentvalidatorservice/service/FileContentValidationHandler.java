@@ -17,6 +17,7 @@ import uk.ac.ebi.ait.filecontentvalidatorservice.dto.ValidationAuthor;
 import uk.ac.ebi.ait.filecontentvalidatorservice.exception.FileContentValidationException;
 import uk.ac.ebi.ait.filecontentvalidatorservice.exception.FileHandleException;
 import uk.ac.ebi.ait.filecontentvalidatorservice.utils.FileContentValidatorMessages;
+import uk.ac.ebi.ait.filecontentvalidatorservice.utils.FileUtil;
 import uk.ac.ebi.ena.readtools.validator.ReadsValidator;
 import uk.ac.ebi.ena.webin.cli.validator.api.ValidationResponse;
 import uk.ac.ebi.ena.webin.cli.validator.file.SubmissionFile;
@@ -40,7 +41,6 @@ import java.util.stream.Collectors;
 import static uk.ac.ebi.ait.filecontentvalidatorservice.service.ErrorMessages.SUBMISSION_FILE_COULD_NOT_BE_FOUND;
 import static uk.ac.ebi.ait.filecontentvalidatorservice.service.ErrorMessages.VALIDATION_REPORT_FILE_ERROR;
 import static uk.ac.ebi.ait.filecontentvalidatorservice.utils.FileUtil.createOutputDir;
-import static uk.ac.ebi.ait.filecontentvalidatorservice.utils.FileUtil.emptyDirectory;
 
 @Service
 @Slf4j
@@ -93,6 +93,9 @@ public class FileContentValidationHandler {
     public ValidationResponse handleFileContentValidation() {
         manifest = getReadsManifest();
         String submissionUUID = commandLineParameters.getSubmissionUUID();
+        String fileUUID = commandLineParameters.getFilesData().stream().map(FileParameters::getFileUUID).collect(Collectors.joining("_"));
+
+        reportFileConfig.setOutputDir(FileUtil.createTempDir(submissionUUID, fileUUID));
 
         this.validationDir = createSubmissionDir(ReportFileConfig.VALIDATE_DIR, submissionUUID);
         this.processDir = createSubmissionDir(ReportFileConfig.PROCESS_DIR, submissionUUID);
@@ -181,7 +184,7 @@ public class FileContentValidationHandler {
                 }
             }
         } catch (IOException ex) {
-            throw new FileHandleException(String.format(VALIDATION_REPORT_FILE_ERROR, fileUUID));
+            throw new FileHandleException(String.format(VALIDATION_REPORT_FILE_ERROR, fileUUID, ex.getMessage()), ex);
         }
 
         return validationResults;
@@ -230,13 +233,8 @@ public class FileContentValidationHandler {
             throw new FileContentValidationException(
                     FileContentValidatorMessages.EXECUTOR_INIT_ERROR.format("Missing submission's UUID."));
         }
-        File newDir =
-                createOutputDir(reportFileConfig.getOutputDir(), reportFileConfig.getContextType(), submissionUUID, dir);
-        if (!emptyDirectory(newDir)) {
-            throw new FileContentValidationException(
-                    FileContentValidatorMessages.EXECUTOR_EMPTY_DIRECTORY_ERROR.format(newDir));
-        }
-        return newDir;
+
+        return createOutputDir(reportFileConfig.getOutputDir(), reportFileConfig.getContextType(), dir);
     }
 
     private File getSubmissionReportFile() {

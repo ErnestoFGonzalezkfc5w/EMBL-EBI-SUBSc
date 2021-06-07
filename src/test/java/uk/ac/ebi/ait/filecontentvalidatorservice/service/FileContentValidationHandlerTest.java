@@ -60,7 +60,7 @@ public class FileContentValidationHandlerTest {
 
     @After
     public void tearDown() throws IOException {
-        deleteReportFileFolderAfterTestExecution(validationHandler.getOutputDir());
+        deleteReportFileFolderAfterTestExecution();
     }
 
     @Test
@@ -153,5 +153,20 @@ public class FileContentValidationHandlerTest {
                 validationHandler.createValidationResultByFileUUID(validationResponse, FILE_UUID);
 
         assertThat(validationResult.get(0).getValidationStatus(), is(equalTo(SingleValidationResultStatus.Pass)));
+    }
+
+    @Test
+    public void whenValidationExecuted2Times_Then2SeparateReportFoldersCreated() {
+        final String testFilePath = "reads/valid.bam";
+        String filesParam = TEST_INITIAL_FILE_PARAMS + "filePath=" + testFilePath;
+        final CommandLineParameters commandLineParameters = CommandLineParametersBuilder.build(filesParam,
+                ReadsManifest.FileType.BAM.toString(), submissionUUID);
+        validationHandler.setCommandLineParameters(commandLineParameters);
+        doReturn(getResourceFile(testFilePath)).when(this.validationHandler).getData(anyString());
+
+        validationHandler.handleFileContentValidation();
+        validationHandler.handleFileContentValidation();
+
+        assertThat(validationHandler.getOutputDir().getParentFile().list().length, is(equalTo(2)));
     }
 }

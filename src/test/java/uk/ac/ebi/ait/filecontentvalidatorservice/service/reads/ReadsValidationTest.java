@@ -61,7 +61,7 @@ public class ReadsValidationTest {
 
     @After
     public void tearDown() throws IOException {
-        deleteReportFileFolderAfterTestExecution(validationHandler.getOutputDir());
+        deleteReportFileFolderAfterTestExecution();
     }
 
     @Test
