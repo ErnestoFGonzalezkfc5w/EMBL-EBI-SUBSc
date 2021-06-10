@@ -19,9 +19,11 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -87,10 +89,16 @@ public class FileContentValidationHandlerTest {
                 validationHandler.createValidationResultByFileUUID(validationResponse, FILE_UUID);
 
         assertThat(validationResult.size(), is(equalTo(2)));
-        assertThat(validationResult.get(0).getValidationStatus(), is(equalTo(SingleValidationResultStatus.Error)));
-        assertThat(validationResult.get(0).getMessage(), is(containsString(expectedValidationResultMessage1)));
-        assertThat(validationResult.get(1).getValidationStatus(), is(equalTo(SingleValidationResultStatus.Error)));
-        assertThat(validationResult.get(1).getMessage(), is(containsString(expectedValidationResultMessageCommon)));
+
+        List<String> actualMessages = validationResult.stream()
+                .map(SingleValidationResult::getMessage).collect(Collectors.toList());
+        List<SingleValidationResultStatus> statuses = validationResult.stream()
+                .map(SingleValidationResult::getValidationStatus).collect(Collectors.toList());
+
+        assertThat(statuses.size(), is(equalTo(2)));
+        assertThat(statuses, hasItem(SingleValidationResultStatus.Error));
+        assertThat(actualMessages, hasItem(expectedValidationResultMessage1));
+        assertThat(actualMessages, hasItem(containsString(expectedValidationResultMessageCommon)));
     }
 
     @Test
@@ -117,23 +125,30 @@ public class FileContentValidationHandlerTest {
         String expectedValidationResultMessageFile1 = "This is an error message";
         String expectedValidationResultMessageFile2 = "This is another error message";
         String expectedValidationResultMessageCommon = "Detected paired fastq submission with less than 20% of paired reads";
+
         final List<SingleValidationResult> validationResultForFile1 =
                 validationHandler.createValidationResultByFileUUID(validationResponse, FILE_UUID);
+        List<String> actualMessagesForFile1 = validationResultForFile1.stream()
+                .map(SingleValidationResult::getMessage).collect(Collectors.toList());
+        List<SingleValidationResultStatus> statusesForFile1 = validationResultForFile1.stream()
+                .map(SingleValidationResult::getValidationStatus).collect(Collectors.toList());
 
         assertThat(validationResultForFile1.size(), is(equalTo(2)));
-        assertThat(validationResultForFile1.get(0).getValidationStatus(), is(equalTo(SingleValidationResultStatus.Error)));
-        assertThat(validationResultForFile1.get(0).getMessage(), is(containsString(expectedValidationResultMessageFile1)));
-        assertThat(validationResultForFile1.get(1).getValidationStatus(), is(equalTo(SingleValidationResultStatus.Error)));
-        assertThat(validationResultForFile1.get(1).getMessage(), is(containsString(expectedValidationResultMessageCommon)));
+        assertThat(statusesForFile1.size(), is(equalTo(2)));
+        assertThat(actualMessagesForFile1, hasItem(containsString(expectedValidationResultMessageFile1)));
+        assertThat(actualMessagesForFile1, hasItem(containsString(expectedValidationResultMessageCommon)));
 
         final List<SingleValidationResult> validationResultForFile2 =
                 validationHandler.createValidationResultByFileUUID(validationResponse, FILE2_UUID);
+        List<String> actualMessagesForFile2 = validationResultForFile2.stream()
+                .map(SingleValidationResult::getMessage).collect(Collectors.toList());
+        List<SingleValidationResultStatus> statusesForFile2 = validationResultForFile2.stream()
+                .map(SingleValidationResult::getValidationStatus).collect(Collectors.toList());
 
-        assertThat(validationResultForFile2.size(), is(equalTo(2)));
-        assertThat(validationResultForFile2.get(0).getValidationStatus(), is(equalTo(SingleValidationResultStatus.Error)));
-        assertThat(validationResultForFile2.get(0).getMessage(), is(containsString(expectedValidationResultMessageFile2)));
-        assertThat(validationResultForFile2.get(1).getValidationStatus(), is(equalTo(SingleValidationResultStatus.Error)));
-        assertThat(validationResultForFile2.get(1).getMessage(), is(containsString(expectedValidationResultMessageCommon)));
+        assertThat(validationResultForFile2.size(), is(equalTo(3)));
+        assertThat(statusesForFile2.size(), is(equalTo(3)));
+        assertThat(actualMessagesForFile2, hasItem(containsString(expectedValidationResultMessageFile2)));
+        assertThat(actualMessagesForFile2, hasItem(containsString(expectedValidationResultMessageCommon)));
     }
 
     @Test
