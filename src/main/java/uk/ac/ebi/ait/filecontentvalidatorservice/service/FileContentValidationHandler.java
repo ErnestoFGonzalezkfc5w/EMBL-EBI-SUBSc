@@ -32,10 +32,12 @@ import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Scanner;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static uk.ac.ebi.ait.filecontentvalidatorservice.service.ErrorMessages.SUBMISSION_FILE_COULD_NOT_BE_FOUND;
@@ -157,37 +159,37 @@ public class FileContentValidationHandler {
             throw new FileContentValidationException(String.format(SUBMISSION_FILE_COULD_NOT_BE_FOUND, fileUUID));
         }
 
-        validationResults.addAll(parseResultFile(fileUUID, submissionFile.getReportFile()));
+        Set<String> errorMessages = new HashSet<>();
+        errorMessages.addAll(parseResultFile(fileUUID, submissionFile.getReportFile()));
+        errorMessages.addAll(parseCommonResultFile(fileUUID));
 
-        validationResults.addAll(parseCommonResultFile(fileUUID));
-
-        return validationResults;
-    }
-
-    private List<SingleValidationResult> parseCommonResultFile(String fileUUID) {
-        List<SingleValidationResult> validationResults = new ArrayList<>();
-        validationResults.addAll(parseResultFile(fileUUID, getSubmissionReportFile()));
+        for (String message : errorMessages) {
+            validationResults.add(
+                    SingleValidationResultBuilder.buildSingleValidationResultWithErrorStatus(message, fileUUID));
+        }
 
         return validationResults;
     }
 
-    private List<SingleValidationResult> parseResultFile(String fileUUID, File reportFile) {
-        List<SingleValidationResult> validationResults = new ArrayList<>();
+    private Set<String> parseCommonResultFile(String fileUUID) {
+        return parseResultFile(fileUUID, getSubmissionReportFile());
+    }
+
+    private Set<String> parseResultFile(String fileUUID, File reportFile) {
+        Set<String> errorMessages = new HashSet<>();
         try (Scanner scanner = new Scanner(new BufferedReader(new FileReader(reportFile)))) {
             while (scanner.hasNext()) {
                 String message = scanner.nextLine();
 
                 if (message.startsWith("ERROR: ")) {
-                    message = message.replace("ERROR: ", "");
-                    validationResults.add(
-                            SingleValidationResultBuilder.buildSingleValidationResultWithErrorStatus(message, fileUUID));
+                    errorMessages.add(message.replace("ERROR: ", ""));
                 }
             }
         } catch (IOException ex) {
             throw new FileHandleException(String.format(VALIDATION_REPORT_FILE_ERROR, fileUUID, ex.getMessage()), ex);
         }
 
-        return validationResults;
+        return errorMessages;
     }
 
     @NotNull
